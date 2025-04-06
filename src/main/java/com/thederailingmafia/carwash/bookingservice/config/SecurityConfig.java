@@ -23,7 +23,10 @@ public class SecurityConfig {
         http
                 .csrf(a -> a.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorizeRequests -> authorizeRequests.requestMatchers("/api/booking/health").permitAll())
+                .authorizeHttpRequests(authorizeRequests -> authorizeRequests.requestMatchers("/api/order/health").permitAll()
+                .requestMatchers("/api/orders/wash-now", "/api/orders/schedule").hasAuthority("CUSTOMER")
+                .requestMatchers("/api/orders/pending", "/api/orders/assign").hasAuthority("ADMIN")
+                .requestMatchers("/api/orders/current", "/api/orders/past", "/api/orders/**").hasAnyAuthority("CUSTOMER", "WASHER", "ADMIN"))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/swagger-ui/**",
