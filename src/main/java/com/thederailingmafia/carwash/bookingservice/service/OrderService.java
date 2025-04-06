@@ -2,6 +2,7 @@ package com.thederailingmafia.carwash.bookingservice.service;
 
 import com.thederailingmafia.carwash.bookingservice.dto.OrderRequest;
 import com.thederailingmafia.carwash.bookingservice.dto.OrderResponse;
+import com.thederailingmafia.carwash.bookingservice.exception.InvalidRoleException;
 import com.thederailingmafia.carwash.bookingservice.exception.OrderNotFoundException;
 import com.thederailingmafia.carwash.bookingservice.model.Order;
 import com.thederailingmafia.carwash.bookingservice.model.OrderStatus;
@@ -45,7 +46,7 @@ public class OrderService {
                 .orElseThrow(() -> new OrderNotFoundException("Order not found"));
 
         if(order.getStatus() != OrderStatus.PENDING){
-            throw new RuntimeException("Order status is not PENDING");
+            throw new OrderNotFoundException("Order status is not PENDING");
         }
 
         order.setWasherEmail(washerEmail);
@@ -63,7 +64,7 @@ public class OrderService {
         else if(role.equals("WASHER")){
             orders = orderRepository.findByCustomerEmail(userEmail);
         }else {
-            throw new RuntimeException("Invalid role");
+            throw new InvalidRoleException("Invalid role");
         }
 
         return orders.stream()
@@ -79,7 +80,7 @@ public class OrderService {
         } else if ("WASHER".equals(role)) {
             orders = orderRepository.findByWasherEmail(userEmail);
         } else {
-            throw new RuntimeException("Invalid role");
+            throw new InvalidRoleException("Invalid role");
         }
         return orders.stream()
                 .filter(o -> o.getStatus() == OrderStatus.COMPLETED || o.getStatus() == OrderStatus.CANCELED)
