@@ -1,6 +1,5 @@
 package com.thederailingmafia.carwash.bookingservice.config;
 
-
 import com.thederailingmafia.carwash.bookingservice.filter.JwtRequestFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -23,18 +22,14 @@ public class SecurityConfig {
         http
                 .csrf(a -> a.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorizeRequests -> authorizeRequests.requestMatchers("/api/order/health").permitAll()
-                .requestMatchers("/api/orders/wash-now", "/api/orders/schedule").hasAuthority("CUSTOMER")
-                .requestMatchers("/api/orders/pending", "/api/orders/assign").hasAuthority("ADMIN")
-                .requestMatchers("/api/orders/current", "/api/orders/past", "/api/orders/**").hasAnyAuthority("CUSTOMER", "WASHER", "ADMIN"))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/swagger-ui.html",
-                                "/swagger-resources/**",
-                                "/webjars/**"
-                        ).permitAll()  //
+                .authorizeHttpRequests(authorizeRequests -> authorizeRequests
+                        .requestMatchers("/api/order/health").permitAll()
+                        .requestMatchers("/api/order/wash-now", "/api/order/schedule").hasAuthority("ROLE_CUSTOMER")
+                        .requestMatchers("/api/order/pending", "/api/order/assign").hasAuthority("ROLE_ADMIN")
+                        .requestMatchers("/api/order/current", "/api/order/past", "/api/order/**", "api/order/{id}")
+                        .hasAnyAuthority("ROLE_CUSTOMER", "ROLE_WASHER", "ROLE_ADMIN") // Add ROLE_ prefix
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**")
+                        .permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
