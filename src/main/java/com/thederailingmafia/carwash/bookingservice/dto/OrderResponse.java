@@ -11,7 +11,7 @@ public class OrderResponse {
     private String customerEmail;
     private String washerEmail;
     private Long carId;
-    private OrderStatus status;
+    private String status;
     private LocalDateTime scheduledTime;
     private LocalDateTime createdAt;
 }

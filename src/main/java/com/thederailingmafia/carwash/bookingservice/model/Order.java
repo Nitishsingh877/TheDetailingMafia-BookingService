@@ -12,13 +12,25 @@ public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "customer_email")
     private String customerEmail;
+
+    @Column(name = "washer_email")
     private String washerEmail;
+
+    @Column(name = "car_id")
     private Long carId;
-    @Enumerated(EnumType.STRING)
+
+    @Enumerated(EnumType.STRING) // Store enum as string
+    @Column(name = "status", nullable = false)
     private OrderStatus status;
+
+    @Column(name = "scheduled_time")
     private LocalDateTime scheduledTime;
-    private LocalDateTime createdAt;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;;
 
     @PrePersist
     public void prePersist() {
