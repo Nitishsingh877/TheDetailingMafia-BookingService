@@ -1,5 +1,7 @@
 package com.thederailingmafia.carwash.bookingservice.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.thederailingmafia.carwash.bookingservice.config.RabbitConfig;
 import com.thederailingmafia.carwash.bookingservice.dto.OrderRequest;
 import com.thederailingmafia.carwash.bookingservice.dto.OrderResponse;
 import com.thederailingmafia.carwash.bookingservice.exception.InvalidRoleException;
@@ -7,10 +9,13 @@ import com.thederailingmafia.carwash.bookingservice.exception.OrderNotFoundExcep
 import com.thederailingmafia.carwash.bookingservice.model.Order;
 import com.thederailingmafia.carwash.bookingservice.model.OrderStatus;
 import com.thederailingmafia.carwash.bookingservice.repository.OrderRepository;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -18,12 +23,19 @@ public class OrderService {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+
     public OrderResponse bookWashNow(OrderRequest request, String userEmail) {
         Order order = new Order();
         order.setCustomerEmail(userEmail);
         order.setCarId(request.getCarId());
 
         Order savedOrder = orderRepository.save(order);
+        publishOrderEvent(savedOrder, "order.created");
         return  mapToResponse(savedOrder);
     }
 
@@ -33,6 +45,7 @@ public class OrderService {
         order.setCarId(request.getCarId());
         order.setScheduledTime(request.getScheduledTime());
         Order savedOrder = orderRepository.save(order);
+        publishOrderEvent(savedOrder, "order.created");
         return  mapToResponse(savedOrder);
     }
 
@@ -52,6 +65,7 @@ public class OrderService {
         order.setWasherEmail(washerEmail);
         order.setStatus(OrderStatus.ASSIGNED);
         Order savedOrder = orderRepository.save(order);
+        publishOrderEvent(savedOrder, "order.assigned");
         return  mapToResponse(savedOrder);
     }
 
@@ -63,6 +77,8 @@ public class OrderService {
             orders = orderRepository.findByCustomerEmail(userEmail);
 
         } else if ("WASHER".equals(normalizedRole)) {
+            orders = orderRepository.findByWasherEmail(userEmail);
+        } else if ("ADMIN".equals(normalizedRole)) {
             orders = orderRepository.findByWasherEmail(userEmail);
         } else {
             throw new RuntimeException("Invalid role: " + normalizedRole);
@@ -136,8 +152,23 @@ public class OrderService {
             order.setWasherEmail(request.getWasherEmail());
         }
         Order updatedOrder = orderRepository.save(order);
+        publishOrderEvent(updatedOrder, "order.updated");
         System.out.println("OrderService updated order: " + updatedOrder.getId() + ", status: " + updatedOrder.getStatus());
         return mapToResponse(updatedOrder);
+    }
+    private void publishOrderEvent(Order order, String eventType) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("event", eventType);
+            event.put("orderId", order.getId());
+            event.put("customerEmail", order.getCustomerEmail());
+            event.put("washerEmail", order.getWasherEmail());
+            event.put("status", order.getStatus().name());
+            rabbitTemplate.convertAndSend(RabbitConfig.EXCHANGE_NAME, "notification." + eventType, objectMapper.writeValueAsString(event));
+            System.out.println("Published event: " + eventType + " for order " + order.getId());
+        } catch (Exception e) {
+            System.err.println("Error publishing event " + eventType + ": " + e.getMessage());
+        }
     }
     private OrderResponse mapToResponse(Order order) {
         OrderResponse response = new OrderResponse();
