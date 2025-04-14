@@ -48,12 +48,6 @@ public class BookingController {
         return pendingOrders;
     }
 
-    @PostMapping("/assign")
-    @PreAuthorize("hasAuthority('ADMIN')")
-    public OrderResponse assignOrder(@RequestParam Long orderId, @RequestParam String washerEmail) {
-        OrderResponse response = orderService.assignOrder(orderId, washerEmail);
-        return response;
-    }
 
     @GetMapping("/current")
     @PreAuthorize("hasAnyAuthority('CUSTOMER', 'WASHER', 'ADMIN')")

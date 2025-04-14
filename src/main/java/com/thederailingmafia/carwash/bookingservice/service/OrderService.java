@@ -6,16 +6,19 @@ import com.thederailingmafia.carwash.bookingservice.dto.OrderRequest;
 import com.thederailingmafia.carwash.bookingservice.dto.OrderResponse;
 import com.thederailingmafia.carwash.bookingservice.exception.InvalidRoleException;
 import com.thederailingmafia.carwash.bookingservice.exception.OrderNotFoundException;
+import com.thederailingmafia.carwash.bookingservice.feign.UserServiceClient;
 import com.thederailingmafia.carwash.bookingservice.model.Order;
 import com.thederailingmafia.carwash.bookingservice.model.OrderStatus;
 import com.thederailingmafia.carwash.bookingservice.repository.OrderRepository;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,6 +28,8 @@ public class OrderService {
 
     @Autowired
     private RabbitTemplate rabbitTemplate;
+    @Autowired
+    private UserServiceClient userServiceClient;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -54,19 +59,52 @@ public class OrderService {
                 .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
-    public OrderResponse assignOrder(Long orderId, String washerEmail) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found"));
+//    public OrderResponse assignOrder(Long orderId, String washerEmail) {
+//        Order order = orderRepository.findById(orderId)
+//                .orElseThrow(() -> new OrderNotFoundException("Order not found"));
+//
+//        if(order.getStatus() != OrderStatus.PENDING){
+//            throw new OrderNotFoundException("Order status is not PENDING");
+//        }
+//
+//        order.setWasherEmail(washerEmail);
+//        order.setStatus(OrderStatus.ASSIGNED);
+//        Order savedOrder = orderRepository.save(order);
+//        publishOrderEvent(savedOrder, "order.assigned");
+//        return  mapToResponse(savedOrder);
+//    }
+     //New: Automatic scheduling
+    @Scheduled(fixedRate = 30000) // Run every 30 seconds
+    public void assignOrder() {
+        try {
+            // Find unassigned orders
+            List<Order> unassignedOrders = orderRepository.findByStatus(OrderStatus.valueOf("PENDING"));
+            if (unassignedOrders.isEmpty()) {
+                System.out.println("No unassigned orders to process");
+                return;
+            }
 
-        if(order.getStatus() != OrderStatus.PENDING){
-            throw new OrderNotFoundException("Order status is not PENDING");
+            // Get available washers
+            List<String> washers = userServiceClient.getWashers();
+            if (washers.isEmpty()) {
+                System.err.println("No available washers");
+                return;
+            }
+
+            Random random = new Random();
+            for (Order order : unassignedOrders) {
+                // Simple random assignment (later: add geolocation)
+                String washerEmail = washers.get(random.nextInt(washers.size()));
+                order.setWasherEmail(washerEmail);
+                order.setStatus(OrderStatus.valueOf("ASSIGNED"));
+                orderRepository.save(order);
+
+                System.out.println("Assigned order " + order.getId() + " to washer " + washerEmail);
+                publishOrderEvent(order, "order.assigned");
+            }
+        } catch (Exception e) {
+            System.err.println("Error in assignOrders: " + e.getMessage());
         }
-
-        order.setWasherEmail(washerEmail);
-        order.setStatus(OrderStatus.ASSIGNED);
-        Order savedOrder = orderRepository.save(order);
-        publishOrderEvent(savedOrder, "order.assigned");
-        return  mapToResponse(savedOrder);
     }
 
     public List<OrderResponse> getCurrentOrders(String userEmail, String role) {
