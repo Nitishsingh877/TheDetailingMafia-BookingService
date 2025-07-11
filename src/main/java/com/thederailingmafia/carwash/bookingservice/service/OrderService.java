@@ -15,10 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,7 +29,12 @@ public class OrderService {
     private UserServiceClient userServiceClient;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+//    The ObjectMapper class in Jackson is used for serializing Java objects to JSON and deserializing JSON to Java objects.
 
+
+    public List<String> getListOfWasher(){
+        return userServiceClient.getWashers().stream().toList();
+    }
 
     public OrderResponse bookWashNow(OrderRequest request, String userEmail) {
         Order order = new Order();
@@ -75,14 +77,15 @@ public class OrderService {
 //    }
      //New: Automatic scheduling
     @Scheduled(fixedRate = 30000) // Run every 30 seconds
+    // Exit early with minimal resource usage
     public void assignOrder() {
+        long count = orderRepository.countByStatus(OrderStatus.PENDING);
+        if (count == 0) {
+            return;
+        }
         try {
             // Find unassigned orders
             List<Order> unassignedOrders = orderRepository.findByStatus(OrderStatus.valueOf("PENDING"));
-            if (unassignedOrders.isEmpty()) {
-                System.out.println("No unassigned orders to process");
-                return;
-            }
 
             // Get available washers
             List<String> washers = userServiceClient.getWashers();
@@ -93,7 +96,7 @@ public class OrderService {
 
             Random random = new Random();
             for (Order order : unassignedOrders) {
-                // Simple random assignment (later: add geolocation)
+                // Simple random assignment
                 String washerEmail = washers.get(random.nextInt(washers.size()));
                 order.setWasherEmail(washerEmail);
                 order.setStatus(OrderStatus.valueOf("ASSIGNED"));
@@ -124,25 +127,42 @@ public class OrderService {
         }
         
         return orders.stream()
-                .filter(o -> o.getStatus() == OrderStatus.PENDING || o.getStatus() == OrderStatus.ASSIGNED)
+                .filter(o -> o.getStatus() == OrderStatus.PENDING || o.getStatus() == OrderStatus.ASSIGNED || o.getStatus() == OrderStatus.ACCEPTED)
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
     public List<OrderResponse> getPastOrders(String userEmail, String role) {
         List<Order> orders;
-        if ("CUSTOMER".equals(role)) {
-            orders = orderRepository.findByCustomerEmail(userEmail);
-        } else if ("WASHER".equals(role)) {
-            orders = orderRepository.findByWasherEmail(userEmail);
-        } else {
-            throw new InvalidRoleException("Invalid role");
+
+        try {
+            if ("ROLE_CUSTOMER".equals(role)) {
+                orders = orderRepository.findByCustomerEmail(userEmail);
+            } else if ("ROLE_WASHER".equals(role)) {
+                orders = orderRepository.findByWasherEmail(userEmail);
+            } else {
+                throw new InvalidRoleException("Invalid role");
+            }
+
+            if (orders == null) {
+                System.out.println("No orders found for user: " + userEmail);
+                return Collections.emptyList();
+            }
+
+            return orders.stream()
+                    .filter(o -> o != null && o.getStatus() != null &&
+                            (o.getStatus() == OrderStatus.ACCEPTED ||
+                                    o.getStatus() == OrderStatus.CANCELED ||
+                                    o.getStatus() == OrderStatus.COMPLETED))
+                    .map(this::mapToResponse)
+                    .collect(Collectors.toList());
+        } catch (Exception ex) {
+            System.err.println("Error in getPastOrders(): " + ex.getMessage());
+            ex.printStackTrace();
+            throw ex; // will trigger 500 if unhandled
         }
-        return orders.stream()
-                .filter(o -> o.getStatus() == OrderStatus.ACCEPTED || o.getStatus() == OrderStatus.CANCELED)
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
     }
+
 
     public OrderResponse getOrder(Long orderId, String userEmail, String role) {
         Order order = orderRepository.findById(orderId)

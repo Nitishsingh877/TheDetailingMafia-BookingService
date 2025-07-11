@@ -24,6 +24,11 @@ public class BookingController {
         return "OK";
     }
 
+    @GetMapping("/list/washer")
+    public List<String> getWasherList() {
+        return orderService.getListOfWasher();
+    }
+
     @PostMapping("/wash-now")
     @PreAuthorize("hasAuthority('CUSTOMER')")
     public OrderResponse bookWashNow(@RequestBody OrderRequest orderRequest) {
@@ -62,9 +67,11 @@ public class BookingController {
     @GetMapping("/past")
     @PreAuthorize("hasAnyAuthority('CUSTOMER', 'WASHER', 'ADMIN')")
     public List<OrderResponse> getPastOrder() {
+        System.out.println("hiited");
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         String role = auth.getAuthorities().stream().findFirst().get().getAuthority();
+        System.out.println("role is "  + role);
         List<OrderResponse> orderResponses = orderService.getPastOrders(email, role);
         return orderResponses;
     }
